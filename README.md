@@ -4,7 +4,7 @@ A browser-based PowerPoint builder for ADPL. Pick a sky-blue layout, type your c
 images and position them exactly where you want them — then export a **real, fully editable
 `.pptx`** file that opens in Microsoft PowerPoint, Google Slides and LibreOffice.
 
-Everything runs client-side: no server, no account, no files leaving the machine.
+Everything runs in the browser — no backend, no account, and nothing you create is ever uploaded.
 
 ![The twelve sky-blue layouts shipped with the template](docs/sky-blue-layouts.png)
 
@@ -60,7 +60,7 @@ on-brand deck in minutes and still hand over a normal `.pptx` at the end.
 - **Project JSON** — save/reopen the whole deck, including embedded images
 
 **Editing comfort**
-- Unlimited undo / redo (`Ctrl/⌘+Z`, `Ctrl/⌘+Shift+Z`) with drag operations collapsed into single steps
+- 90 steps of undo / redo (`Ctrl/⌘+Z`, `Ctrl/⌘+Shift+Z`), with each drag collapsed into one step
 - Autosave to the browser (reopen the tab and your deck is still there)
 - Copy / paste / duplicate objects (`Ctrl/⌘+C`, `Ctrl/⌘+V`, `Ctrl/⌘+D`), arrow-key nudging
   (`Shift` = bigger steps), `Delete` to remove, `Esc` to deselect
