@@ -64,12 +64,31 @@ export function SlideView({
         width: deck.size.w * px,
         height: deck.size.h * px,
         overflow: 'hidden',
-        ...backgroundCss(slide, px),
+        backgroundColor: '#FFFFFF',
         ...style,
       }}
     >
+      {/*
+        The slide background lives on its own layer rather than on the root
+        node. Rasterisers can override the root element's background — the
+        html-to-image `backgroundColor` option does exactly that — which
+        silently turned the sky-blue section and closing slides white in the
+        PDF export. Keeping it on a child makes it immune.
+      */}
+      <div
+        className="slide-bg"
+        data-bg={bg.type}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          pointerEvents: 'none',
+          ...backgroundCss(slide, px),
+        }}
+      />
+
       {bg.type === 'image' && bg.overlay ? (
         <div
+          className="slide-bg-overlay"
           style={{
             position: 'absolute',
             inset: 0,

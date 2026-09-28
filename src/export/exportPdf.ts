@@ -41,11 +41,30 @@ async function waitForImages(node: HTMLElement): Promise<void> {
   )
 }
 
+/**
+ * Options for the rasteriser.
+ *
+ * Deliberately no `backgroundColor`: html-to-image applies that by setting
+ * `style.backgroundColor` on the clone, which overwrites the slide's own
+ * background and exported the dark section and closing slides as white.
+ * The slide paints its background itself (see SlideView).
+ */
+export function captureOptions(width: number, height: number) {
+  return {
+    pixelRatio: 1,
+    width,
+    height,
+    style: { transform: 'none', margin: '0' },
+    cacheBust: false,
+  }
+}
+
 /** Render one slide into a detached container and capture it as a PNG. */
 async function captureSlideDom(slide: Slide, _index: number, pxPerInch: number, deck: Deck): Promise<string> {
   const host = document.createElement('div')
   host.setAttribute('aria-hidden', 'true')
-  host.style.cssText = 'position:fixed;left:-100000px;top:0;pointer-events:none;opacity:0;'
+  host.style.cssText =
+    'position:fixed;left:-100000px;top:0;pointer-events:none;contain:strict;'
   document.body.appendChild(host)
 
   const root = createRoot(host)
@@ -58,13 +77,7 @@ async function captureSlideDom(slide: Slide, _index: number, pxPerInch: number, 
     await waitForImages(host)
     const target = host.firstElementChild as HTMLElement | null
     if (!target) throw new Error('slide did not render')
-    return await toPng(target, {
-      pixelRatio: 1,
-      width: Math.round(deck.size.w * pxPerInch),
-      height: Math.round(deck.size.h * pxPerInch),
-      backgroundColor: '#FFFFFF',
-      style: { transform: 'none', margin: '0' },
-    })
+    return await toPng(target, captureOptions(Math.round(deck.size.w * pxPerInch), Math.round(deck.size.h * pxPerInch)))
   } finally {
     root.unmount()
     host.remove()

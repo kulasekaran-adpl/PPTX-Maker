@@ -70,7 +70,8 @@ export function TopBar({ onPresent }: { onPresent: () => void }) {
     if (!node) return
     setBusy('Rendering PNG…')
     try {
-      const dataUrl = await toPng(node, { pixelRatio: 2, backgroundColor: '#FFFFFF' })
+      // no backgroundColor option: it would overwrite the slide's own background
+      const dataUrl = await toPng(node, { pixelRatio: 2 })
       const res = await fetch(dataUrl)
       downloadBlob(await res.blob(), exportFileName({ ...deck, title: `${deck.title}-slide` }, 'png'))
       toast('Slide exported as PNG', 'ok')

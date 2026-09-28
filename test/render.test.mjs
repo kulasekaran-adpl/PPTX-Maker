@@ -4,6 +4,8 @@ import { renderToString } from 'react-dom/server'
 import { createElement as h } from 'react'
 import App from '../src/App.tsx'
 import { migrateDeck, makeStarter } from '../src/state/useStore.tsx'
+import { SlideView } from '../src/components/SlideView.tsx'
+import { captureOptions } from '../src/export/exportPdf.ts'
 
 /* ---- deck migrations ---- */
 const legacy = makeStarter()
@@ -27,9 +29,35 @@ const migrationChecks = {
   'migration is idempotent': migrateDeck(migrated) === migrated,
 }
 
+/* ---- slide backgrounds survive rasterisation ---- */
+const deckForBg = makeStarter()
+const slideHtml = (i) => renderToString(h(SlideView, { slide: deckForBg.slides[i], deck: deckForBg, px: 1 }))
+const sectionHtml = slideHtml(2)   // section divider — solid #097DC2
+const closingHtml = slideHtml(9)   // closing — solid #05395A
+const coverHtml = slideHtml(0)     // cover — solid #F5FAFE
+
+const bgLayerColor = (html) => {
+  const m = /class="slide-bg"[^>]*style="([^"]*)"/.exec(html) ?? /style="([^"]*)"[^>]*class="slide-bg"/.exec(html)
+  return m ? m[1] : ''
+}
+const captureOpts = captureOptions(2560, 1440)
+
+const backgroundChecks = {
+  'slide background is its own layer': sectionHtml.includes('class="slide-bg"'),
+  'section divider exports sky blue (#097DC2)': /#097DC2/i.test(bgLayerColor(sectionHtml)),
+  'closing slide exports deep navy (#05395A)': /#05395A/i.test(bgLayerColor(closingHtml)),
+  'cover keeps its pale sky (#F5FAFE)': /#F5FAFE/i.test(bgLayerColor(coverHtml)),
+  // the rasteriser must not override the element background — this is the bug
+  // that exported the dark slides as white
+  'rasteriser does not override the background': !('backgroundColor' in captureOpts),
+  'rasteriser still gets explicit dimensions':
+    captureOpts.width === 2560 && captureOpts.height === 1440,
+}
+
 const html = renderToString(h(App))
 const checks = {
   ...migrationChecks,
+  ...backgroundChecks,
   'renders markup': html.length > 5000,
   'has sky-blue cover': html.includes('Add your presentation title here'),
   'logo present': html.includes('adpl-logo-blue.png'),

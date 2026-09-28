@@ -4,3 +4,7 @@ dist/
 *.local
 .DS_Store
 .preview-*.png
+
+# python bytecode from the render tool
+__pycache__/
+*.pyc
