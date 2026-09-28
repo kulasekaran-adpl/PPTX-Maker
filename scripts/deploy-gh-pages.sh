@@ -59,10 +59,10 @@ git -c user.name="${GIT_AUTHOR_NAME:-adpl-deck-studio}" \
     commit -q -m "Publish built site ($STAMP)"
 
 # Every deploy is a fresh orphan snapshot, so there is no shared history with
-# the previous one and the update is a force push. Nothing is ever committed to
-# this branch by hand — it holds build output only.
-git push --force-with-lease="$TRACKING" "$REMOTE" "$BRANCH" \
-  || git push --force "$REMOTE" "$BRANCH"
+# the previous one and the update is always a force push. This branch is
+# machine-owned (build output only, never edited by hand), and the snapshot
+# comparison above already skipped the push when nothing changed.
+git push --force "$REMOTE" "$BRANCH"
 
 echo "✔ published to $BRANCH at $STAMP"
 echo "  Live once Pages is on: Settings → Pages → Deploy from a branch → $BRANCH → / (root)"
