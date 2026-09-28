@@ -7,6 +7,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import type { AnyImageFit, Deck, El, ImageEl, LogoVariant, ShapeKind, Slide, SlideSize, TextEl } from '../types'
 import { layoutById, newSlide, SW, SH } from '../templates/skyBlue'
 import { clamp, loadImageSize, normalizeUpload, uid } from '../lib/util'
+import { DEFAULT_FONT } from '../theme'
 import { useHistory } from './useHistory'
 
 const STORAGE_KEY = 'adpl-deck-studio:project:v1'

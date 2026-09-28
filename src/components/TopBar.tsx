@@ -2,34 +2,70 @@ import React, { useState } from 'react'
 import { toPng } from 'html-to-image'
 import { useStore } from '../state/useStore'
 import { buildPptx, exportFileName } from '../export/exportPptx'
+import { buildPdf } from '../export/exportPdf'
 import { downloadBlob, toDataUrl } from '../lib/util'
 import { SKY } from '../theme'
+
+type FontMode = 'slides-safe' | 'as-designed'
 
 export function TopBar({ onPresent }: { onPresent: () => void }) {
   const store = useStore()
   const { deck, patchDeck, undo, redo, canUndo, canRedo, setBusy, toast, currentSlide } = store
   const [menu, setMenu] = useState(false)
+  const [fontMode, setFontMode] = useState<FontMode>('slides-safe')
+
+  const closeMenu = () => setMenu(false)
 
   const exportPptx = async () => {
-    setMenu(false)
+    closeMenu()
     setBusy('Preparing PowerPoint…')
     try {
       const blob = await buildPptx(deck, {
         resolveImage: toDataUrl,
+        fonts: fontMode,
         progress: (_d, _t, label) => setBusy(label),
       })
       downloadBlob(blob, exportFileName(deck, 'pptx'))
-      toast('PowerPoint file downloaded — open it in Office', 'ok')
+      toast(
+        fontMode === 'slides-safe'
+          ? 'PowerPoint file ready — safe to upload to Google Slides'
+          : 'PowerPoint file ready — fonts kept as designed',
+        'ok',
+      )
     } catch (err) {
       console.error(err)
-      toast('Export failed. Check the console for details.', 'warn')
+      toast('PPTX export failed. Check the console for details.', 'warn')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const exportPdf = async () => {
+    closeMenu()
+    setBusy('Rendering PDF…')
+    try {
+      let last = 0
+      const blob = await buildPdf(deck, {
+        pxPerInch: 192, // 2560 × 1440 per 16:9 page — crisp on screen and in print
+        onProgress: (done, total) => {
+          if (done !== last) {
+            last = done
+            setBusy(`Rendering PDF… slide ${Math.min(done + 1, total)} of ${total}`)
+          }
+        },
+      })
+      downloadBlob(blob, exportFileName(deck, 'pdf'))
+      toast('PDF downloaded — one page per slide', 'ok')
+    } catch (err) {
+      console.error(err)
+      toast('PDF export failed. Check the console for details.', 'warn')
     } finally {
       setBusy(null)
     }
   }
 
   const exportPng = async () => {
-    setMenu(false)
+    closeMenu()
     const node = document.querySelector('.stage .slide') as HTMLElement | null
     if (!node) return
     setBusy('Rendering PNG…')
@@ -79,11 +115,15 @@ export function TopBar({ onPresent }: { onPresent: () => void }) {
           </button>
           {menu && (
             <>
-              <div className="menu-backdrop" onClick={() => setMenu(false)} />
-              <div className="menu">
+              <div className="menu-backdrop" onClick={closeMenu} />
+              <div className="menu wide">
                 <button onClick={exportPptx}>
                   <b>PowerPoint (.pptx)</b>
                   <span>Editable slides — text, shapes and images stay editable</span>
+                </button>
+                <button onClick={exportPdf}>
+                  <b>PDF (all slides)</b>
+                  <span>One page per slide, 2560 × 1440 — for sharing and printing</span>
                 </button>
                 <button onClick={exportPng}>
                   <b>Current slide as PNG</b>
@@ -91,13 +131,32 @@ export function TopBar({ onPresent }: { onPresent: () => void }) {
                 </button>
                 <button
                   onClick={() => {
-                    setMenu(false)
+                    closeMenu()
                     onPresent()
                   }}
                 >
                   <b>Preview</b>
                   <span>Full-screen check before you send it</span>
                 </button>
+
+                <div className="menu-sep" />
+                <div className="menu-option">
+                  <label className="check tiny">
+                    <input
+                      type="checkbox"
+                      checked={fontMode === 'slides-safe'}
+                      onChange={(e) => setFontMode(e.target.checked ? 'slides-safe' : 'as-designed')}
+                    />
+                    <span>
+                      <b>Google Slides–safe fonts</b>
+                      <span>
+                        Swaps fonts Slides does not have (e.g. Calibri) for Arial, and pins text boxes so
+                        nothing re-wraps or shifts after upload. Turn off to keep your chosen fonts for a
+                        PowerPoint-only audience.
+                      </span>
+                    </span>
+                  </label>
+                </div>
               </div>
             </>
           )}

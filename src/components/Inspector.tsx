@@ -1,7 +1,7 @@
 import React, { useMemo, useRef } from 'react'
 import type { Background, Deck, El, ImageEl, ShapeEl, TextEl } from '../types'
 import { useStore } from '../state/useStore'
-import { FONTS, SKY, SLIDE_PRESETS } from '../theme'
+import { DEFAULT_FONT, FONTS, SKY, SLIDE_PRESETS, SLIDES_SAFE_FONTS } from '../theme'
 import { LAYOUTS } from '../templates/skyBlue'
 import { downloadBlob, loadImageSize, normalizeUpload, safeFileName } from '../lib/util'
 import { ColorField, Field, IconBtn, NumberInput, Row, Section, Seg, Select, TextInput, Toggle } from './ui'
@@ -686,7 +686,7 @@ function DeckSettings({ deck, patchDeck }: { deck: Deck; patchDeck: (p: Partial<
                             kind: 'text',
                             name: 'Slide number',
                             text: '01',
-                            font: 'Calibri',
+                            font: DEFAULT_FONT,
                             size: 10,
                             color: '#8AA4B5',
                             bold: false,
@@ -756,6 +756,45 @@ function DeckSettings({ deck, patchDeck }: { deck: Deck; patchDeck: (p: Partial<
             </div>
           </div>
         )}
+      </Section>
+
+      <Section title="Cross-platform fonts" defaultOpen={false}>
+        <p className="hint">
+          Decks exported with <b>Google Slides–safe fonts</b> (the default in the Export menu) are converted on the
+          way out — nothing to do here. Use this button if you also want the editor itself to preview those fonts,
+          for example after pasting text in Calibri.
+        </p>
+        <button
+          className="btn tiny wide"
+          onClick={() => {
+            let changed = 0
+            patchDeck(
+              {
+                slides: deck.slides.map((s) => ({
+                  ...s,
+                  elements: s.elements.map((e) => {
+                    if (e.kind !== 'text') return e
+                    if (SLIDES_SAFE_FONTS.includes(e.font)) return e
+                    changed += 1
+                    return { ...e, font: DEFAULT_FONT }
+                  }),
+                })),
+              },
+              'Slide-safe fonts',
+            )
+            toast(
+              changed
+                ? `Switched ${changed} text box${changed > 1 ? 'es' : ''} to ${DEFAULT_FONT}`
+                : `Everything already uses a Slides-safe font`,
+              changed ? 'ok' : 'info',
+            )
+          }}
+        >
+          Switch the whole deck to {DEFAULT_FONT}
+        </button>
+        <p className="hint">
+          Slides-safe: {SLIDES_SAFE_FONTS.join(' · ')}
+        </p>
       </Section>
 
       <Section title="Project" defaultOpen={false}>

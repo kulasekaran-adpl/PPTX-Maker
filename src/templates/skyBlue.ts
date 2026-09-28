@@ -1,5 +1,6 @@
 import type { El, Slide } from '../types'
 import { uid } from '../lib/util'
+import { DEFAULT_FONT } from '../theme'
 
 /* ------------------------------------------------------------------
  * Layout geometry — every number is inches on a 13.333 × 7.5 stage.
@@ -55,7 +56,7 @@ export function pageNumberEl(): El {
     kind: 'text',
     name: 'Slide number',
     text: '01',
-    font: 'Calibri',
+    font: DEFAULT_FONT,
     size: 10,
     color: '#8AA4B5',
     bold: false,
@@ -87,7 +88,7 @@ export function T(x: number, y: number, w: number, h: number, text: string, o: T
     id: uid('txt'),
     kind: 'text',
     text,
-    font: 'Calibri',
+    font: DEFAULT_FONT,
     size: 16,
     color: '#0E2A3D',
     bold: false,

@@ -55,7 +55,9 @@ on-brand deck in minutes and still hand over a normal `.pptx` at the end.
 **Export**
 - **PowerPoint (.pptx)** — every element becomes a native Office object: editable text boxes,
   autoshapes and embedded pictures (no slide images). Includes a reusable `ADPL Sky Blue` slide
-  master and speaker notes.
+  master and speaker notes. Google Slides–safe by default (see below).
+- **PDF** — one page per slide at 2560 × 1440 px, rendered from the same preview the canvas uses,
+  so it matches the deck exactly. Good for sharing, approval and printing.
 - **PNG** — a 2× raster of the current slide for chat/email
 - **Project JSON** — save/reopen the whole deck, including embedded images
 
@@ -159,11 +161,39 @@ src/
     Inspector.tsx          properties for the selection, slide and deck
     Preview.tsx            full-screen presenter check
     ui.tsx                 inputs, colour picker, tabs
-  export/exportPptx.ts     deck -> .pptx (pptxgenjs) and slide -> PNG
+  export/
+    exportPptx.ts          deck -> .pptx (pptxgenjs) + slide -> PNG
+    exportPdf.ts           deck -> PDF (jsPDF, one raster page per slide)
+    pptxCompat.ts          Google Slides fixes: fonts, slack, autofit, outlines
 scripts/deploy-gh-pages.sh build + publish the static site to the gh-pages branch
 docs/deploy-cicd.yml       optional GitHub Actions workflow for automatic deploys
 test/                      pptx pipeline test and server-render smoke test
 ```
+
+### Uploading to Google Slides
+
+The .pptx export is tuned so a deck keeps its layout when it is uploaded to Google Drive and
+opened in Google Slides. Four things make the difference, all handled automatically by
+`src/export/pptxCompat.ts`:
+
+| Cause of drift | What the exporter does |
+| --- | --- |
+| **Font substitution** — Slides has no Calibri, so it swaps in a font with different letter widths and the text re-wraps | Every font is mapped to one Slides ships natively (Arial by default), so glyph metrics match |
+| **Re-wrapping** — a line that just fits in PowerPoint spills to a second line in Slides | Text boxes get ~4 % width slack on the way out, and short single-line labels are pinned with `wrap="none"` so they cannot wrap at all |
+| **Line spacing** — percentage spacing (`<a:spcPct/>`) is interpreted differently | Spacing is written as absolute points (`<a:spcPts/>`) |
+| **Autofit** — a box with no explicit setting can be grown or shrunk to fit its text, moving it | `<a:noAutofit/>` is pinned on every text box |
+
+There is also a plain bug this fixes along the way: pptxgenjs writes an empty `<a:ln></a:ln>` on
+text boxes, which PowerPoint and Keynote draw as a thin border around every text box. The export
+rewrites it to an explicit "no outline".
+
+To keep the fonts you chose instead, untick **Google Slides–safe fonts** in the Export menu — that
+is the right choice for a PowerPoint-only audience. Deck settings also has a one-click
+**Switch the whole deck to Arial** action for when you want the editor preview to match Google
+Slides too.
+
+> Fidelity is now limited by Google Slides itself, not by the file. If something still shifts,
+> re-check in Slides in this order: fonts → text fitting → spacing.
 
 ### How the geometry stays honest
 
@@ -193,8 +223,11 @@ is intended for the sky-blue and navy backgrounds.
 
 - The canvas is the source of truth for text wrapping; very long paragraphs may need a size
   tweak after export. The dashed box warning flags anything that will not fit.
-- Calibri ships with Office; on other systems the preview falls back to a metric-compatible
-  substitute, so line breaks can differ slightly. The exported file still specifies Calibri.
+- Text is laid out live in the browser, so line breaks depend on the font being present. The
+  template uses Arial for that reason; picking a rarer font means the preview and the export can
+  differ slightly (the Slides-safe export rewrites those fonts anyway).
+- The PDF is rasterised, so its text is not selectable or searchable. Ask if you need a
+  vector/text PDF instead.
 - Charts, tables, SmartArt and video are not part of the tool yet.
 - Decks are stored in this browser's `localStorage`; use **Save project** for a portable file.
 

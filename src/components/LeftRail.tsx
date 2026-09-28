@@ -3,7 +3,7 @@ import type { El, ShapeKind } from '../types'
 import { useStore } from '../state/useStore'
 import { SlideView } from './SlideView'
 import { LAYOUTS } from '../templates/skyBlue'
-import { SKY } from '../theme'
+import { DEFAULT_FONT, SKY } from '../theme'
 import { LayoutThumb } from './LayoutThumb'
 import { ShapeGlyph, SHAPE_LABELS } from './ElementView'
 import { uid } from '../lib/util'
@@ -131,7 +131,7 @@ function InsertPanel({ onPresent }: { onPresent: () => void }) {
         id: uid('txt'),
         kind: 'text',
         text: 'Add your headline',
-        font: 'Calibri',
+        font: DEFAULT_FONT,
         size: 32,
         color: SKY.brandDeep,
         bold: true,
@@ -159,7 +159,7 @@ function InsertPanel({ onPresent }: { onPresent: () => void }) {
         id: uid('txt'),
         kind: 'text',
         text: 'Write a short paragraph that supports the headline.',
-        font: 'Calibri',
+        font: DEFAULT_FONT,
         size: 15,
         color: SKY.ink,
         bold: false,
@@ -187,7 +187,7 @@ function InsertPanel({ onPresent }: { onPresent: () => void }) {
         id: uid('txt'),
         kind: 'text',
         text: 'First point\nSecond point\nThird point',
-        font: 'Calibri',
+        font: DEFAULT_FONT,
         size: 15,
         color: SKY.ink,
         bold: false,
@@ -215,7 +215,7 @@ function InsertPanel({ onPresent }: { onPresent: () => void }) {
         id: uid('txt'),
         kind: 'text',
         text: 'Figure 1 · short caption',
-        font: 'Calibri',
+        font: DEFAULT_FONT,
         size: 10.5,
         color: SKY.inkFaint,
         bold: false,

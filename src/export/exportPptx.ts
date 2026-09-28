@@ -2,6 +2,13 @@ import PptxGenJS from 'pptxgenjs'
 import type { Background, Deck, El, ImageEl, ShapeEl, Slide, TextEl } from '../types'
 import { parseRichText, safeFileName, type Paragraph } from '../lib/util'
 import { stripHash } from '../theme'
+import {
+  fitsOnOneLine,
+  polishPptxXml,
+  resolveFont,
+  slackenBox,
+  type FontMode,
+} from './pptxCompat'
 
 /* ------------------------------------------------------------------
  * Deck -> .pptx
@@ -15,6 +22,15 @@ export interface ExportOptions {
    *  be unit-tested outside the browser. */
   resolveImage?: (src: string) => Promise<string>
   progress?: (done: number, total: number, label: string) => void
+  /**
+   * 'slides-safe' (default) swaps unsupported fonts for ones Google Slides
+   * ships natively, so imported decks keep their line breaks and alignment.
+   * 'as-designed' keeps exactly the fonts chosen in the editor — right for
+   * a PowerPoint-only audience.
+   */
+  fonts?: FontMode
+  /** Set false to skip the XML compatibility pass (used by tests). */
+  polish?: boolean
 }
 
 const TRANSPARENT = 'FFFFFF'
@@ -59,7 +75,7 @@ const shadowOf = (el: El) => {
 /** PowerPoint text metrics: text sits inside an inset of ~0.05" by default. */
 const marginPt = (insetInches: number) => Math.round(Math.max(0, insetInches) * 72 * 100) / 100
 
-function textBody(el: TextEl) {
+function textBody(el: TextEl, font: string, slide: { w: number; h: number }, compat: boolean) {
   const paras: Paragraph[] = parseRichText(el.text, el.bullets, {
     color: stripHash(el.color),
     size: el.size,
@@ -67,6 +83,11 @@ function textBody(el: TextEl) {
     italic: el.italic,
     underline: el.underline,
   })
+
+  // Geometry: give the box a little slack and pin short labels to one line so
+  // a renderer with wider metrics cannot re-wrap or shift the text.
+  const box = compat ? slackenBox(el, slide) : { x: el.x, y: el.y, w: el.w, h: el.h }
+  const noWrap = compat && fitsOnOneLine(el, box.w)
 
   const runs = paras.map((p: Paragraph) => ({
     text: p.runs.map((r) => r.text).join('') || ' ',
@@ -91,12 +112,12 @@ function textBody(el: TextEl) {
   return {
     text: runs.length ? runs : [{ text: ' ', options: {} }],
     options: {
-      x: el.x,
-      y: el.y,
-      w: Math.max(0.2, el.w),
-      h: Math.max(0.2, el.h),
+      x: box.x,
+      y: box.y,
+      w: Math.max(0.2, box.w),
+      h: Math.max(0.2, box.h),
       rotate: el.rotation || 0,
-      fontFace: el.font,
+      fontFace: font,
       fontSize: el.size,
       color: stripHash(el.color),
       bold: el.bold,
@@ -105,13 +126,18 @@ function textBody(el: TextEl) {
       align: el.align,
       valign: el.valign,
       charSpacing: el.charSpacing,
-      lineSpacingMultiple: el.lineSpacing,
+      /**
+       * Absolute points, not a percentage. <a:spcPct/> is interpreted
+       * differently by Google Slides, which changes every line height and
+       * makes multi-line blocks drift out of alignment.
+       */
+      lineSpacing: Math.round(el.size * el.lineSpacing * 100) / 100,
       margin: marginPt(el.padding),
       fill: el.fill ? (fillOf(el.fill, el.opacity) as never) : undefined,
       shadow: shadowOf(el),
       isTextBox: true,
       objectName: el.name || 'Text',
-      wrap: true,
+      wrap: !noWrap,
       fit: 'none' as const,
     },
   }
@@ -218,6 +244,7 @@ async function renderSlide(
   slide: Slide,
   layoutName: string,
   resolve: (s: string) => Promise<string>,
+  fontMode: FontMode,
 ) {
   const ps = pptx.addSlide({ masterName: layoutName })
   await applyBackground(ps, pptx, slide.bg, deck.size.w, deck.size.h, resolve)
@@ -226,7 +253,12 @@ async function renderSlide(
     if (el.hidden) continue
 
     if (el.kind === 'text') {
-      const { text, options } = textBody(el)
+      const { text, options } = textBody(
+        el,
+        resolveFont(el.font, fontMode),
+        deck.size,
+        fontMode === 'slides-safe',
+      )
       ps.addText(text as never, options as never)
       continue
     }
@@ -278,8 +310,8 @@ export async function buildPptx(deck: Deck, opts: ExportOptions = {}): Promise<B
   pptx.title = deck.title || 'Presentation'
   pptx.subject = deck.title || 'Presentation'
   pptx.theme = {
-    headFontFace: 'Calibri',
-    bodyFontFace: 'Calibri',
+    headFontFace: resolveFont('Calibri', opts.fonts ?? 'slides-safe'),
+    bodyFontFace: resolveFont('Calibri', opts.fonts ?? 'slides-safe'),
   }
 
   // Named, reusable master so recipients see the ADPL sky-blue layout in
@@ -292,15 +324,20 @@ export async function buildPptx(deck: Deck, opts: ExportOptions = {}): Promise<B
     slideNumber: undefined,
   })
 
+  const fontMode: FontMode = opts.fonts ?? 'slides-safe'
+
   const total = deck.slides.length
   for (let i = 0; i < total; i += 1) {
     opts.progress?.(i, total, `Rendering slide ${i + 1} of ${total}`)
-    await renderSlide(pptx, deck, deck.slides[i], layoutName, resolve)
+    await renderSlide(pptx, deck, deck.slides[i], layoutName, resolve, fontMode)
   }
   opts.progress?.(total, total, 'Packaging .pptx')
 
-  const out = await pptx.write({ outputType: 'blob' })
-  return out as Blob
+  const out = (await pptx.write({ outputType: 'blob' })) as Blob
+  if (opts.polish === false) return out
+
+  opts.progress?.(total, total, 'Applying compatibility fixes')
+  return polishPptxXml(out)
 }
 
 /* ------------------------------------------------------------------

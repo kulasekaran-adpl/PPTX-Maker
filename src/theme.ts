@@ -48,9 +48,9 @@ export const SWATCHES: { name: string; value: string }[] = [
 
 /** Fonts that exist on both Windows and macOS Office installs come first. */
 export const FONTS = [
+  'Arial',
   'Calibri',
   'Segoe UI',
-  'Arial',
   'Inter',
   'Open Sans',
   'Verdana',
@@ -62,7 +62,26 @@ export const FONTS = [
   'Impact',
 ]
 
-export const DEFAULT_FONT = 'Calibri'
+/**
+ * Arial is the safest cross-platform choice: Google Slides, PowerPoint,
+ * LibreOffice and macOS all render it with the same metrics, so a deck keeps
+ * its line breaks wherever it is opened. Calibri is PowerPoint-only — Google
+ * Slides substitutes it and the text re-wraps.
+ */
+export const DEFAULT_FONT = 'Arial'
+
+/** Fonts every mainstream renderer (incl. Google Slides) ships natively. */
+export const SLIDES_SAFE_FONTS = [
+  'Arial',
+  'Roboto',
+  'Georgia',
+  'Verdana',
+  'Tahoma',
+  'Trebuchet MS',
+  'Times New Roman',
+  'Courier New',
+  'Impact',
+]
 
 export const FONT_STACK: Record<string, string> = {
   Calibri: "Calibri, Carlito, 'Segoe UI', system-ui, sans-serif",
