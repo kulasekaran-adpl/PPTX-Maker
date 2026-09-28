@@ -86,6 +86,44 @@ Checks:
 npm test             # typecheck + pptx pipeline test + component render test
 ```
 
+## Deploying
+
+The app is a plain static bundle, so any web host works (Netlify, Vercel, Cloudflare Pages, S3,
+an internal IIS/Apache folder — just serve the contents of `dist/`).
+
+### GitHub Pages — prepared, one switch left
+
+A built copy of the site is already published on the **`gh-pages`** branch of this repository.
+To make it live:
+
+1. Open the repo → **Settings → Pages**
+2. **Source:** *Deploy from a branch* · **Branch:** `gh-pages` · folder `/ (root)` → **Save**
+3. After a minute or two the app is at
+   `https://kulasekaran-adpl.github.io/PPTX-Maker/`
+
+Publish new versions after any change:
+
+```bash
+npm run deploy      # runs the tests, builds, and pushes the gh-pages branch
+```
+
+The script is `scripts/deploy-gh-pages.sh` — it keeps `gh-pages` as an orphan branch containing
+only build output, so the source history stays clean, and it is idempotent (re-running it with no
+changes just says so).
+
+Two things to be aware of before enabling it: GitHub Pages is only available on private
+repositories for paid plans, and a Pages site is **publicly readable** even when the repository is
+private. This tool has no secrets and never sends data anywhere, but the published bundle does
+become public. Prefer to keep it internal? Deploy `dist/` to an internal host, or use
+`npm run preview` on a shared machine instead.
+
+### Continuous deployment (optional)
+
+To build and deploy on every push instead of running `npm run deploy` by hand, copy
+[`docs/deploy-cicd.yml`](docs/deploy-cicd.yml) to `.github/workflows/deploy-pages.yml` in the
+repository (GitHub's web UI can create the file directly), then set
+**Settings → Pages → Source: GitHub Actions**.
+
 ## Keyboard shortcuts
 
 | Action | Shortcut |
@@ -122,6 +160,9 @@ src/
     Preview.tsx            full-screen presenter check
     ui.tsx                 inputs, colour picker, tabs
   export/exportPptx.ts     deck -> .pptx (pptxgenjs) and slide -> PNG
+scripts/deploy-gh-pages.sh build + publish the static site to the gh-pages branch
+docs/deploy-cicd.yml       optional GitHub Actions workflow for automatic deploys
+test/                      pptx pipeline test and server-render smoke test
 ```
 
 ### How the geometry stays honest
