@@ -165,6 +165,7 @@ src/
     exportPptx.ts          deck -> .pptx (pptxgenjs) + slide -> PNG
     exportPdf.ts           deck -> PDF (jsPDF, one raster page per slide)
     pptxCompat.ts          Google Slides fixes: fonts, slack, autofit, outlines
+tools/render-pptx.py       render an exported .pptx from its OOXML (layout check)
 scripts/deploy-gh-pages.sh build + publish the static site to the gh-pages branch
 docs/deploy-cicd.yml       optional GitHub Actions workflow for automatic deploys
 test/                      pptx pipeline test and server-render smoke test
@@ -192,8 +193,31 @@ is the right choice for a PowerPoint-only audience. Deck settings also has a one
 **Switch the whole deck to Arial** action for when you want the editor preview to match Google
 Slides too.
 
+**Diagonal artwork is written as exact geometry.** The cover's sky-blue field and its accent band
+are polygons (`<a:custGeom/>`), not oversized rotated rectangles. Rotation placement is the most
+renderer-dependent part of OOXML — a 20 in square rotated 25° looks different in PowerPoint, Google
+Slides and Keynote — so the template avoids it entirely. For the same reason, any rectangle you
+rotate in the editor is baked into a polygon on export: identical output everywhere, and you can
+still drag it back with the rotate handle before exporting.
+
 > Fidelity is now limited by Google Slides itself, not by the file. If something still shifts,
 > re-check in Slides in this order: fonts → text fitting → spacing.
+
+### Verifying what the file will look like
+
+`tools/render-pptx.py` paints an exported .pptx *from the OOXML itself* — offsets, extents,
+rotation, custom-geometry paths, colours and text runs — so you can see what PowerPoint and Google
+Slides will draw without opening either:
+
+```bash
+npm run test:export                                   # writes .tmp/adpl-test-deck.pptx
+python3 tools/render-pptx.py .tmp/adpl-test-deck.pptx .tmp/render.png 2   # contact sheet
+python3 -m pip install pillow                         # the only dependency
+```
+
+Text is laid out in DejaVu Sans, which is wider than Arial, so a slide that fits here fits in the
+real thing. It is a layout check, not a full renderer: curved presets are approximated and shadow
+or gradient fills are flattened.
 
 ### How the geometry stays honest
 
@@ -230,6 +254,9 @@ is intended for the sky-blue and navy backgrounds.
   vector/text PDF instead.
 - Charts, tables, SmartArt and video are not part of the tool yet.
 - Decks are stored in this browser's `localStorage`; use **Save project** for a portable file.
+- Decks saved by an earlier version are upgraded on load (the old rotated cover art is replaced;
+  your text is left alone). A .pptx exported *before* that fix still contains the old artwork —
+  re-export it from the updated app.
 
 ## Roadmap ideas
 

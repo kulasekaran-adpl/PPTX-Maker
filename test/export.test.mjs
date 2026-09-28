@@ -54,6 +54,12 @@ async function main() {
     opacity: 1, shadow: { color: '#05395A', opacity: 0.25, blur: 6, offset: 3, angle: 45 },
   })
   deck.slides[3].notes = 'Speaker notes land in PowerPoint’s presenter view.'
+  // a user-rotated rectangle must come out as a polygon, not a rotated box
+  deck.slides[5].elements.push({
+    id: 'rot1', kind: 'shape', name: 'Rotated band', shape: 'rect', fill: '#A3D3EF', fillOpacity: 1,
+    line: null, lineWidth: 0, dash: 'solid', radius: 0, x: 1, y: 5.4, w: 6, h: 0.5, rotation: 345,
+    opacity: 1, shadow: null,
+  })
 
   /* ------------------------------- PPTX ------------------------------- */
   const t0 = Date.now()
@@ -96,6 +102,64 @@ async function main() {
   }
   check('notes survive', Object.keys(zip.files).some((n) => n.startsWith('ppt/notesSlides/notesSlide')))
   check('media embedded', Object.keys(zip.files).filter((n) => n.startsWith('ppt/media/')).length >= 10)
+
+  {
+    /* ---- cover art is an exact polygon, not a rotated square ---- */
+    const cover = await zip.file('ppt/slides/slide1.xml').async('string')
+    const rot = (cover.match(/rot="(?!0\b)\d+"/g) ?? [])
+    check('no rotated shapes left in the cover', rot.length === 0, rot.join(' '))
+
+    // The blue field\'s diagonal edge must run down-LEFT: wide at the top of
+    // the slide, narrow at the bottom.
+    // custGeom coordinates are relative to each shape's own top-left, so add
+    // the shape offset to get slide coordinates
+    const shapes = [...cover.matchAll(/<p:sp>[\s\S]*?<\/p:sp>/g)]
+      .map((sp) => sp[0])
+      .filter((sp) => sp.includes('<a:custGeom>'))
+      .map((sp) => {
+        const off = /<a:off x="(-?\d+)" y="(-?\d+)"\/>/.exec(sp)
+        const ox = Number(off?.[1] ?? 0) / 914400
+        const oy = Number(off?.[2] ?? 0) / 914400
+        const name = /name="([^"]+)"/.exec(sp)?.[1] ?? ''
+        const points = [...sp.matchAll(/<a:pt x="(\d+)" y="(\d+)"\/>/g)].map((m) => ({
+          x: Number(m[1]) / 914400 + ox,
+          y: Number(m[2]) / 914400 + oy,
+        }))
+        return { name, points }
+      })
+    const field = shapes.find((sh) => sh.name.includes('Sky field'))
+    const pts = shapes.flatMap((sh) => sh.points)
+    const leftmostTop = Math.min(...(field?.points ?? []).filter((p) => p.y < 0.05).map((p) => p.x))
+    const leftmostBottom = Math.min(
+      ...(field?.points ?? []).filter((p) => p.y > 7.4).map((p) => p.x),
+    )
+    check(
+      'cover art exported as exact polygons',
+      shapes.length === 2 && !!field,
+      `${shapes.length} paths, field ${field ? 'found' : 'MISSING'}`,
+    )
+    check(
+      'diagonal runs top-right to bottom-left',
+      Math.abs(leftmostTop - 10.6) < 0.05 && Math.abs(leftmostBottom - 5.2) < 0.05,
+      `edge x=${leftmostTop.toFixed(2)}in (top) → ${leftmostBottom.toFixed(2)}in (bottom), want 10.60 → 5.20`,
+    )
+
+    // nothing may stick out past the slide edges
+    const maxX = Math.max(...pts.map((p) => p.x))
+    const maxY = Math.max(...pts.map((p) => p.y))
+    check('cover art stays on the slide', maxX <= 13.34 && maxY <= 7.51, `max ${maxX.toFixed(2)} x ${maxY.toFixed(2)}in`)
+  }
+
+  {
+    const slide6 = await zip.file('ppt/slides/slide6.xml').async('string')
+    const band = /<p:sp>[\s\S]*?Rotated band[\s\S]*?<\/p:sp>/.exec(slide6)?.[0] ?? ''
+    check(
+      'user-rotated rectangle baked into a polygon',
+      band.includes('<a:custGeom>') && !/rot="(?!0\b)\d+"/.test(band),
+      band.includes('<a:custGeom>') ? 'custGeom path written' : 'shape missing or still rotated',
+    )
+  }
+
 
   /* as-designed mode keeps the requested fonts */
   const native = await buildPptx(deck, { resolveImage, fonts: 'as-designed' })

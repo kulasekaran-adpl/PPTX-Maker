@@ -29,6 +29,12 @@ const PATH: Partial<Record<ShapeKind, string>> = {
   arc: 'M0.5 1 A0.5 0.5 0 0 1 1 0.5',
 }
 
+/** Build an SVG path string from normalised freeform points. */
+export const pointsToPath = (points: [number, number][] = []): string =>
+  points.length
+    ? `${points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x} ${y}`).join(' ')} Z`
+    : ''
+
 export const SHAPE_LABELS: { kind: ShapeKind; label: string }[] = [
   { kind: 'rect', label: 'Rectangle' },
   { kind: 'roundRect', label: 'Rounded' },
@@ -57,6 +63,11 @@ export const ShapeGlyph = ({ kind, size = 22, color = 'currentColor' }: { kind: 
       {kind === 'roundRect' && <rect x="3" y="5" width="16" height="12" rx="3" fill={color} />}
       {kind === 'ellipse' && <ellipse cx="11" cy="11" rx="8" ry="6" fill={color} />}
       {kind === 'line' && <line x1="3" y1="16" x2="19" y2="6" stroke={color} strokeWidth="2.4" />}
+      {kind === 'freeform' && (
+        <g transform="translate(3 4) scale(16 14)">
+          <path d="M0 1 L0.62 1 L1 0 L0.38 0 Z" fill={color} stroke={stroke} strokeWidth={0.5} vectorEffect="non-scaling-stroke" />
+        </g>
+      )}
       {!isBox && kind !== 'line' && PATH[kind] && (
         <g transform="translate(3 4) scale(16 14)">
           <path
@@ -108,7 +119,7 @@ function ShapeBody({ el, scale }: { el: ShapeEl; scale: ScaleFn }) {
   if (el.shape === 'ellipse')
     return <div style={{ ...common, background: fill, borderRadius: '50%' }} />
 
-  const d = PATH[el.shape]
+  const d = el.shape === 'freeform' ? pointsToPath(el.points) : PATH[el.shape]
   if (!d) return <div style={{ ...common, background: fill }} />
   return (
     <svg

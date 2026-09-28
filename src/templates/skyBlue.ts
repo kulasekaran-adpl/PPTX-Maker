@@ -143,29 +143,51 @@ export function S(
   } as El
 }
 
-/** Rotated rectangle specified by its CENTRE — rotation in PowerPoint (and
- *  CSS) happens about the centre, so this is the natural way to author
- *  diagonal bands without trial-and-error. */
-export function rotRect(
-  cx: number,
-  cy: number,
-  w: number,
-  h: number,
-  rotate: number,
-  o: ShapeOpts = {},
-): El {
-  return S('rect', cx - w / 2, cy - h / 2, w, h, { rotation: rotate, ...o })
+/** Exact polygon from absolute slide coordinates (inches).
+ *  The points are normalised into the element box, so nothing is rotated:
+ *  every renderer draws the identical outline.                      */
+export function freeform(points: [number, number][], o: ShapeOpts = {}): El {
+  const xs = points.map((p) => p[0])
+  const ys = points.map((p) => p[1])
+  const minX = Math.min(...xs)
+  const minY = Math.min(...ys)
+  const w = Math.max(0.01, Math.max(...xs) - minX)
+  const h = Math.max(0.01, Math.max(...ys) - minY)
+  return S('freeform', minX, minY, w, h, {
+    points: points.map(([x, y]) => [
+      Math.round(((x - minX) / w) * 100000) / 100000,
+      Math.round(((y - minY) / h) * 100000) / 100000,
+    ]),
+    ...o,
+  })
 }
 
-/** Diagonal geometry for the cover art (see notes in the README). */
-export const COVER_DIAGONAL = {
-  cx: 19.19,
-  cy: 3.75,
-  size: 20,
-  angle: 335, // = −25° clockwise
-  /** outward normal of the diagonal edge, used to offset the accent sliver */
-  nx: -0.906,
-  ny: 0.423,
+/**
+ * Cover artwork geometry.
+ *
+ * The sky-blue field is a trapezoid whose diagonal edge runs from
+ * (10.60in, 0) at the top to (5.20in, 7.5in) at the bottom, with a lighter
+ * sliver tracing its outer edge. Both are plain polygons — the earlier
+ * version built them from a 20in × 20in square rotated by 25 degrees, which
+ * is why the diagonal came out wrong (and inverted) after upload.
+ */
+export const COVER_GEOMETRY = {
+  /** right-hand sky-blue field */
+  field: [
+    [10.6, 0],
+    [SW, 0],
+    [SW, SH],
+    [5.2, SH],
+  ] as [number, number][],
+  /** lighter accent band hugging the diagonal, 0.3in wide */
+  sliver: [
+    [10.2303, 0],
+    [10.6, 0],
+    [5.2, SH],
+    [4.8305, SH],
+  ] as [number, number][],
+  /** leftmost x the diagonal allows at a given y (keeps copy clear of the art) */
+  edgeX: (y: number) => 10.6 - (y / SH) * 5.4,
 }
 
 /** Slide-number / footer furniture shared by every content layout. */
@@ -246,65 +268,56 @@ const cover: LayoutDef = {
   id: 'cover',
   name: 'Cover',
   hint: 'Title slide with sky-blue diagonal',
-  build: () => {
-    const d = COVER_DIAGONAL
-    return {
-      layout: 'cover',
-      name: 'Cover',
-      bg: { type: 'solid', color: '#F5FAFE' },
-      notes: 'Open with the deck title, who it is for and the date.',
-      elements: [
-        // accent sliver sitting just outside the main sky field
-        rotRect(d.cx + d.nx * 0.34, d.cy + d.ny * 0.34, d.size, d.size, d.angle, {
-          name: 'Accent sliver',
-          fill: '#A3D3EF',
-        }),
-        rotRect(d.cx, d.cy, d.size, d.size, d.angle, {
-          name: 'Sky field',
-          fill: '#097DC2',
-        }),
-        T(0.78, 1.42, 6.4, 0.3, 'COMPANY PRESENTATION', {
-          name: 'Eyebrow',
-          size: 10.5,
-          bold: true,
-          color: '#2E96D3',
-          charSpacing: 1.8,
-          valign: 'middle',
-          h: 0.28,
-        }),
-        T(0.78, 1.82, 6.25, 1.75, 'Add your presentation title here', {
-          name: 'Title',
-          size: 42,
-          bold: true,
-          color: '#05395A',
-          lineSpacing: 1.02,
-          valign: 'middle',
-          h: 1.6,
-        }),
-        S('rect', 0.8, 3.76, 1.15, 0.085, { fill: '#097DC2', name: 'Accent rule' }),
-        T(0.78, 4.04, 5.6, 0.72, 'A short subtitle that frames the story of this deck.', {
-          name: 'Subtitle',
-          size: 15,
-          color: '#4B6779',
-          lineSpacing: 1.35,
-          h: 0.7,
-        }),
-        T(0.78, 5.62, 6.1, 0.3, 'Prepared for  ·  Client name', {
-          size: 11.5,
-          color: '#8AA4B5',
-          valign: 'middle',
-          h: 0.26,
-        }),
-        T(0.78, 5.98, 6.1, 0.3, 'September 2026', {
-          size: 11.5,
-          color: '#8AA4B5',
-          valign: 'middle',
-          h: 0.26,
-        }),
-        logoEl(10.42, 5.98, 0.9, 'white'),
-      ],
-    }
-  },
+  build: () => ({
+    layout: 'cover',
+    name: 'Cover',
+    bg: { type: 'solid', color: '#F5FAFE' },
+    notes: 'Open with the deck title, who it is for and the date.',
+    elements: [
+      freeform(COVER_GEOMETRY.sliver, { name: 'Accent sliver', fill: '#A3D3EF' }),
+      freeform(COVER_GEOMETRY.field, { name: 'Sky field', fill: '#097DC2' }),
+      T(0.78, 1.62, 6.1, 0.3, 'COMPANY PRESENTATION', {
+        name: 'Eyebrow',
+        size: 10.5,
+        bold: true,
+        color: '#2E96D3',
+        charSpacing: 1.8,
+        valign: 'middle',
+        h: 0.28,
+      }),
+      // width kept clear of the diagonal (see COVER_GEOMETRY.edgeX)
+      T(0.78, 2.02, 6.4, 1.5, 'Add your presentation title here', {
+        name: 'Title',
+        size: 40,
+        bold: true,
+        color: '#05395A',
+        lineSpacing: 1.04,
+        valign: 'middle',
+        h: 1.44,
+      }),
+      S('rect', 0.8, 3.72, 1.15, 0.085, { fill: '#097DC2', name: 'Accent rule' }),
+      T(0.78, 4.0, 5.9, 0.72, 'A short subtitle that frames the story of this deck.', {
+        name: 'Subtitle',
+        size: 15,
+        color: '#4B6779',
+        lineSpacing: 1.35,
+        h: 0.7,
+      }),
+      T(0.78, 5.62, 4.4, 0.3, 'Prepared for  ·  Client name', {
+        size: 11.5,
+        color: '#8AA4B5',
+        valign: 'middle',
+        h: 0.26,
+      }),
+      T(0.78, 5.98, 4.4, 0.3, 'September 2026', {
+        size: 11.5,
+        color: '#8AA4B5',
+        valign: 'middle',
+        h: 0.26,
+      }),
+      logoEl(10.3, 6.08, 0.8, 'white'),
+    ],
+  }),
 }
 
 const agenda: LayoutDef = {

@@ -12,7 +12,7 @@ import { useHistory } from './useHistory'
 
 const STORAGE_KEY = 'adpl-deck-studio:project:v1'
 const PREF_KEY = 'adpl-deck-studio:prefs:v1'
-const DECK_VERSION = 3
+const DECK_SCHEMA = 2
 
 interface Prefs {
   logoVariant: LogoVariant
@@ -92,8 +92,49 @@ export const useStore = (): Store => {
 
 const minSize = (el: El) => (el.kind === 'text' ? 0.15 : 0.1)
 
+/** Names of the cover artwork shapes, used by the migration below. */
+const COVER_ART_NAMES = ['Sky field', 'Accent sliver']
+
+/**
+ * Deck migrations.
+ *
+ * v1 -> v2: the cover artwork used to be a 20in square rotated by 25°, which
+ * some renderers (Google Slides among them) placed differently from the
+ * preview — and which came out mirrored when the maths was wrong. It is now
+ * an exact polygon. Swap the stale shapes for the current ones, keeping every
+ * other element (including the user's own text and images) untouched.
+ */
+export function migrateDeck(deck: Deck): Deck {
+  if ((deck.schema ?? 1) >= DECK_SCHEMA) return deck
+
+  const isStaleArt = (el: El) =>
+    el.kind === 'shape' &&
+    COVER_ART_NAMES.includes(el.name ?? '') &&
+    el.shape !== 'freeform'
+
+  const fresh = newSlide('cover').elements.filter(
+    (el) => el.kind === 'shape' && COVER_ART_NAMES.includes(el.name ?? ''),
+  )
+
+  const slides = deck.slides.map((slide) => {
+    if (!slide.elements.some(isStaleArt)) return slide
+    let next = 0
+    return {
+      ...slide,
+      elements: slide.elements.map((el) => {
+        if (!isStaleArt(el)) return el
+        const replacement = fresh[next] ?? fresh[fresh.length - 1]
+        next += 1
+        return replacement ? ({ ...replacement, id: el.id } as El) : el
+      }),
+    }
+  })
+
+  return { ...deck, schema: DECK_SCHEMA, slides }
+}
+
 export const makeStarter = (): Deck => ({
-  schema: 1,
+  schema: DECK_SCHEMA,
   id: uid('deck'),
   title: 'ADPL Presentation',
   size: { w: SW, h: SH },
@@ -136,7 +177,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (raw) {
         const parsed = JSON.parse(raw)
         if (parsed?.deck?.slides?.length) {
-          hist.reset({ ...makeStarter(), ...parsed.deck, schema: 1 })
+          // upgrade decks written by earlier versions of the app
+          hist.reset(migrateDeck({ ...makeStarter(), ...parsed.deck }))
         }
       }
       const p = localStorage.getItem(PREF_KEY)

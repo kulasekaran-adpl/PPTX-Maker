@@ -4,10 +4,13 @@ import { parseRichText, safeFileName, type Paragraph } from '../lib/util'
 import { stripHash } from '../theme'
 import {
   fitsOnOneLine,
+  normalisePoints,
   polishPptxXml,
   resolveFont,
+  rotatedRectPoints,
   slackenBox,
   type FontMode,
+  type FreeformMap,
 } from './pptxCompat'
 
 /* ------------------------------------------------------------------
@@ -238,6 +241,29 @@ async function applyBackground(
   }
 }
 
+/**
+ * Rectangles that carry a rotation become plain polygons before export, so
+ * the result cannot depend on how a given app interprets `rot`. Ellipses and
+ * rounded rectangles keep their rotation (their outline cannot be expressed
+ * as a polygon without losing the curve).
+ */
+function bakeShape(el: ShapeEl, freeforms: FreeformMap): ShapeEl {
+  const rotated = el.rotation % 360 !== 0
+  const mark = (name: string) => `ADPLFF_${freeforms.size + 1} ${name}`.trim()
+  if (el.shape === 'freeform' && el.points?.length) {
+    const name = mark(el.name ?? 'Polygon')
+    freeforms.set(name, el.points)
+    return { ...el, name }
+  }
+  if (rotated && el.shape === 'rect') {
+    const norm = normalisePoints(rotatedRectPoints(el))
+    const name = mark(el.name ?? 'Rectangle')
+    freeforms.set(name, norm.points)
+    return { ...el, shape: 'freeform', name, rotation: 0, x: norm.x, y: norm.y, w: norm.w, h: norm.h }
+  }
+  return el
+}
+
 async function renderSlide(
   pptx: PptxGenJS,
   deck: Deck,
@@ -245,6 +271,7 @@ async function renderSlide(
   layoutName: string,
   resolve: (s: string) => Promise<string>,
   fontMode: FontMode,
+  freeforms: FreeformMap,
 ) {
   const ps = pptx.addSlide({ masterName: layoutName })
   await applyBackground(ps, pptx, slide.bg, deck.size.w, deck.size.h, resolve)
@@ -264,8 +291,9 @@ async function renderSlide(
     }
 
     if (el.kind === 'shape') {
-      const shape = pptx.ShapeType[el.shape as keyof typeof pptx.ShapeType] ?? pptx.ShapeType.rect
-      ps.addShape(shape as never, shapeOptions(el) as never)
+      const baked = bakeShape(el, freeforms)
+      const shape = pptx.ShapeType[baked.shape as keyof typeof pptx.ShapeType] ?? pptx.ShapeType.rect
+      ps.addShape(shape as never, shapeOptions(baked) as never)
       continue
     }
 
@@ -325,11 +353,14 @@ export async function buildPptx(deck: Deck, opts: ExportOptions = {}): Promise<B
   })
 
   const fontMode: FontMode = opts.fonts ?? 'slides-safe'
+  // exact polygons (template art + any rotated rectangle) collected while
+  // rendering, injected into the XML after pptxgenjs writes the file
+  const freeforms: FreeformMap = new Map()
 
   const total = deck.slides.length
   for (let i = 0; i < total; i += 1) {
     opts.progress?.(i, total, `Rendering slide ${i + 1} of ${total}`)
-    await renderSlide(pptx, deck, deck.slides[i], layoutName, resolve, fontMode)
+    await renderSlide(pptx, deck, deck.slides[i], layoutName, resolve, fontMode, freeforms)
   }
   opts.progress?.(total, total, 'Packaging .pptx')
 
@@ -337,7 +368,7 @@ export async function buildPptx(deck: Deck, opts: ExportOptions = {}): Promise<B
   if (opts.polish === false) return out
 
   opts.progress?.(total, total, 'Applying compatibility fixes')
-  return polishPptxXml(out)
+  return polishPptxXml(out, freeforms)
 }
 
 /* ------------------------------------------------------------------

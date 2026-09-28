@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "test": "npm run typecheck && npm run test:export && npm run test:render",
     "test:export": "esbuild test/export.test.mjs --bundle --platform=node --format=cjs --outfile=.tmp/export-test.cjs --log-level=warning && node .tmp/export-test.cjs",
-    "test:render": "esbuild test/render.test.mjs --bundle --platform=node --format=cjs --loader:.css=empty --outfile=.tmp/render-test.cjs --log-level=warning && node .tmp/render-test.cjs"
+    "test:render": "esbuild test/render.test.mjs --bundle --platform=node --format=cjs --loader:.css=empty --outfile=.tmp/render-test.cjs --log-level=warning && node .tmp/render-test.cjs",
+    "render:check": "python3 tools/render-pptx.py .tmp/adpl-test-deck.pptx .tmp/render.png 2"
   },
   "dependencies": {
     "html-to-image": "^1.11.13",

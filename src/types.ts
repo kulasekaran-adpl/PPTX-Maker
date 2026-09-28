@@ -84,6 +84,10 @@ export type ShapeKind =
   | 'star5'
   | 'plus'
   | 'arc'
+  /** exact polygon — used for diagonal art; needs no rotation, so every
+   *  renderer (PowerPoint, Google Slides, LibreOffice, Keynote) draws the
+   *  same shape */
+  | 'freeform'
 
 export interface ShapeEl extends BaseEl {
   kind: 'shape'
@@ -94,6 +98,9 @@ export interface ShapeEl extends BaseEl {
   lineWidth: number // pt
   dash: 'solid' | 'dash' | 'dot'
   radius: number // inches (roundRect only)
+  /** polygon outline for shape === 'freeform', normalised to the element box
+   *  (0..1 on both axes) so it scales with the box and needs no rotation */
+  points?: [number, number][]
 }
 
 export type El = TextEl | ImageEl | ShapeEl
@@ -123,7 +130,8 @@ export interface Slide {
 export type LogoVariant = 'blue' | 'white' | 'navy'
 
 export interface Deck {
-  schema: 1
+  /** bumped when the document model changes; older decks are migrated on load */
+  schema: number
   id: string
   title: string
   size: SlideSize
